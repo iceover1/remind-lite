@@ -3,13 +3,14 @@ const $ = (id) => document.getElementById(id);
 const DEF_SERVER = ""; // 首次使用在 ⚙️ 里填自己的服务器地址
 
 let cfg = { serverUrl: DEF_SERVER, apiToken: "" };
+let candDates = []; // 🎯 识别出的候选日期 [{date, raw}]
 
 function toast(text, ok = true) {
   const t = document.createElement("div");
   t.className = "toast";
   t.textContent = text;
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), ok ? 1200 : 2200);
+  setTimeout(() => t.remove(), ok ? 1400 : 2400);
 }
 
 function fmtDate(d) {
@@ -22,8 +23,7 @@ async function loadCfg() {
   cfg.apiToken = got.apiToken || "";
   $("serverUrl").value = cfg.serverUrl;
   $("apiToken").value = cfg.apiToken;
-  if (!cfg.apiToken) $("cfg").classList.add("show");
-  if (!cfg.serverUrl) $("cfg").classList.add("show");
+  if (!cfg.apiToken || !cfg.serverUrl) $("cfg").classList.add("show");
 }
 
 async function saveCfg() {
@@ -31,7 +31,6 @@ async function saveCfg() {
   cfg.apiToken = $("apiToken").value.trim();
   await chrome.storage.local.set(cfg);
   $("cfgMsg").textContent = "已保存（未验证）";
-  // 验证连通性
   try {
     const r = await fetch(`${cfg.serverUrl}/healthz`);
     const j = await r.json();
@@ -39,6 +38,78 @@ async function saveCfg() {
   } catch (e) {
     $("cfgMsg").textContent = "❌ 连不上服务器，检查地址";
   }
+}
+
+// ===== 🎯 智能识别：选中文字 → 日期 + 账号 =====
+async function getSelectionText() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const res = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => window.getSelection().toString(),
+    });
+    if (res && res[0] && res[0].result) return res[0].result;
+  } catch (_) { /* 无权限或特殊页面 */ }
+  const got = await chrome.storage.local.get(["pendingText"]);
+  return got.pendingText || "";
+}
+
+async function smartPick() {
+  const msg = $("msg");
+  msg.textContent = "读取选中文字…";
+  const sel = await getSelectionText();
+  if (!sel.trim()) {
+    msg.textContent = "";
+    toast("先在网页上用鼠标划选到期信息，再点此按钮", false);
+    return;
+  }
+  candDates = RLParser.findDates(sel);
+  const accounts = RLParser.findAccounts(sel);
+
+  // 日期：首选自动填 + 候选可切换
+  if (candDates.length) {
+    $("expireDate").value = candDates[0].date;
+    const list = $("candList");
+    list.innerHTML = "";
+    candDates.forEach((c, i) => {
+      const chip = document.createElement("span");
+      chip.className = "chip" + (i === 0 ? " on" : "");
+      chip.textContent = c.date;
+      chip.addEventListener("click", () => {
+        $("expireDate").value = c.date;
+        list.querySelectorAll(".chip").forEach((x) => x.classList.remove("on"));
+        chip.classList.add("on");
+      });
+      list.appendChild(chip);
+    });
+    $("cands").classList.add("show");
+  } else {
+    $("cands").classList.remove("show");
+  }
+
+  // 标题：取选中内容的第一行（去掉纯日期行）
+  const lines = sel.trim().split(/\n+/).filter((l) => !/^\d{4}[-/.年]/.test(l.trim()));
+  const firstLine = (lines[0] || sel.trim()).slice(0, 60);
+  if (!$("title").value.trim()) $("title").value = firstLine;
+
+  // 备注：账号信息 + 来源
+  const noteParts = [];
+  if (accounts.length) noteParts.push(...accounts);
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && tab.url) noteParts.push(`来源 ${tab.url}`);
+  } catch (_) {}
+  $("note").value = noteParts.join("\n");
+
+  msg.textContent = candDates.length
+    ? `✅ 识别到到期日 ${candDates[0].date}，请核对后提交` + (accounts.length ? `；账号 ${accounts.length} 项已入备注` : "")
+    : "⚠️ 没识别到日期（可手动选），账号信息已入备注";
+}
+
+function selectedAdvDays() {
+  const days = [];
+  document.querySelectorAll("#advChips .chip.on").forEach((c) => days.push(parseInt(c.dataset.d, 10)));
+  return days.length ? days : [30, 7, 1, 0];
 }
 
 async function submit() {
@@ -56,7 +127,7 @@ async function submit() {
       body: JSON.stringify({
         title, category: $("category").value, note: $("note").value.trim(),
         expire_date: expireDate, cycle: "none",
-        remind_days: "default", remind_times: times,
+        remind_days: selectedAdvDays(), remind_times: times,
       }),
     });
     const j = await r.json();
@@ -78,19 +149,8 @@ async function insertTab() {
   $("title").value = cur ? `${cur} ${seg}` : seg;
 }
 
-// 右键菜单/快捷键带来的预填文字
-async function loadPending() {
-  const got = await chrome.storage.local.get(["pendingText"]);
-  if (got.pendingText) {
-    $("title").value = got.pendingText;
-    $("title").focus();
-    chrome.storage.local.remove("pendingText");
-  }
-}
-
 document.addEventListener("DOMContentLoaded", () => {
   loadCfg();
-  loadPending();
   // 默认选中「7天后」
   const today = new Date();
   $("expireDate").value = fmtDate(new Date(today.getTime() + 7 * 86400e3));
@@ -100,6 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("saveCfg").addEventListener("click", saveCfg);
   $("submit").addEventListener("click", submit);
   $("insertTab").addEventListener("click", insertTab);
+  $("smartPick").addEventListener("click", smartPick);
 
   document.querySelectorAll("#dateChips .chip").forEach((c) => {
     c.addEventListener("click", () => {
@@ -111,6 +172,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("expireDate").addEventListener("change", () => {
     const diff = Math.round((new Date($("expireDate").value) - today) / 86400e3);
     markChip(diff);
+  });
+  // 提前天数勾选
+  document.querySelectorAll("#advChips .chip").forEach((c) => {
+    c.addEventListener("click", () => c.classList.toggle("on"));
   });
 
   $("title").addEventListener("keydown", (e) => {

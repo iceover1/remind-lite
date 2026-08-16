@@ -9,7 +9,7 @@
     :root { --bg:#0d1117; --card:#161b22; --border:#30363d; --text:#e6edf3; --muted:#8b949e; }
   }
   * { box-sizing: border-box; }
-  body { width: 320px; margin: 0; background: var(--bg); color: var(--text);
+  body { width: 330px; margin: 0; background: var(--bg); color: var(--text);
          font: 14px/1.5 -apple-system, "PingFang SC", sans-serif; }
   header { display: flex; justify-content: space-between; align-items: center;
            padding: 10px 14px; border-bottom: 1px solid var(--border); }
@@ -19,11 +19,11 @@
          display: none; }
   .cfg.show { display: block; }
   .cfg .row { display: flex; gap: 6px; margin-bottom: 6px; }
-  input, select, textarea { width: 100%; border: 1px solid var(--border); background: var(--bg);
+  input, select, textarea { width: 100%; border: 1px solid var(--border); background: var(--card);
     color: var(--text); border-radius: 6px; padding: 6px 8px; font: inherit; }
-  textarea { resize: vertical; min-height: 56px; }
+  textarea { resize: vertical; min-height: 52px; }
   main { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .chip { border: 1px dashed var(--border); background: transparent; color: var(--muted);
           border-radius: 999px; padding: 2px 10px; font-size: 12.5px; cursor: pointer; }
   .chip.on { border-style: solid; color: var(--primary); border-color: var(--primary); }
@@ -33,9 +33,17 @@
   button.primary { flex: 1; background: var(--primary); color: #fff; border: none;
                    border-radius: 8px; padding: 8px; font-size: 14px; cursor: pointer; }
   button.primary:disabled { opacity: .5; }
+  button.smart { background: linear-gradient(120deg, #2f6feb, #7c5cf0); color: #fff; border: none;
+                 border-radius: 8px; padding: 8px; font-size: 14px; cursor: pointer; font-weight: 600; }
   .hint { color: var(--muted); font-size: 12px; }
+  .cands { display: none; background: color-mix(in srgb, var(--primary) 7%, var(--card));
+           border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+  .cands.show { display: block; }
+  .cands .t { font-size: 12px; color: var(--muted); }
+  .cands .chip.on { background: var(--primary); color: #fff; }
   .toast { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-           background: rgba(0,0,0,.45); color: #fff; font-size: 15px; border-radius: 8px; }
+           background: rgba(0,0,0,.45); color: #fff; font-size: 15px; border-radius: 8px;
+           padding: 0 12px; text-align: center; }
 </style>
 </head>
 <body>
@@ -54,8 +62,15 @@
 </div>
 
 <main>
-  <textarea id="title" placeholder="提醒内容，如：dpdns.org 域名续费（Ctrl+Enter 提交）"></textarea>
+  <button class="smart" id="smartPick">🎯 识别选中文字（到期日 + 账号 → 自动填）</button>
+  <div class="cands" id="cands">
+    <span class="t">识别到日期（点选切换）：</span>
+    <div class="chips" id="candList" style="margin-top:4px"></div>
+  </div>
+
+  <textarea id="title" placeholder="提醒内容（Ctrl+Enter 提交）"></textarea>
   <div class="chips" id="dateChips">
+    <span class="hint">快捷:</span>
     <span class="chip" data-days="1">明天</span>
     <span class="chip" data-days="7">7天后</span>
     <span class="chip" data-days="30">30天后</span>
@@ -71,18 +86,28 @@
     </label>
   </div>
   <div class="grid2">
-    <label>推送时刻（逗号分隔多个）
-      <input id="remindTimes" value="09:00" placeholder="09:00,20:00">
-    </label>
-    <label>备注<input id="note" placeholder="续费入口/账号等（可选）"></label>
+    <label>推送时刻（逗号分隔）<input id="remindTimes" value="09:00" placeholder="09:00,20:00"></label>
+    <label>备注（识别的账号会自动填入）<input id="note" placeholder="识别后自动填/可手改"></label>
   </div>
+  <label>提前几天推送（勾选，到期日不变）
+    <div class="chips" id="advChips" style="margin-top:2px">
+      <span class="chip" data-d="60">60天</span>
+      <span class="chip on" data-d="30">30天</span>
+      <span class="chip" data-d="14">14天</span>
+      <span class="chip on" data-d="7">7天</span>
+      <span class="chip" data-d="3">3天</span>
+      <span class="chip on" data-d="1">1天</span>
+      <span class="chip on" data-d="0">当天</span>
+    </div>
+  </label>
   <div class="foot">
     <button class="primary" id="submit">添加提醒</button>
     <button class="chip" id="insertTab" title="插入当前标签页标题和链接">🔗本页</button>
   </div>
-  <div class="hint" id="msg">提醒日默认提前 30/7/1/0 天推送</div>
+  <div class="hint" id="msg"></div>
 </main>
 
+<script src="parse.js"></script>
 <script src="popup.js"></script>
 </body>
 </html>

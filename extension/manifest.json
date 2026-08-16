@@ -22,7 +22,7 @@
       "suggested_key": { "default": "Ctrl+Shift+U", "mac": "MacCtrl+Shift+U" }
     }
   },
-  "permissions": ["storage", "activeTab", "contextMenus"],
+  "permissions": ["storage", "activeTab", "contextMenus", "scripting"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "icons": {
     "16": "icons/icon16.png",
