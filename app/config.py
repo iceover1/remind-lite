@@ -40,4 +40,4 @@ BASE_URL = os.environ.get("RL_BASE_URL", "http://localhost:15809")
 SCHEDULER_ENABLED = os.environ.get("RL_SCHEDULER", "1") == "1"
 
 APP_NAME = "时效 Lite"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.3"
