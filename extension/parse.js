@@ -106,11 +106,17 @@ const RLParser = (() => {
       const label = /域名|domain/i.test(text.slice(Math.max(0, m.index - 12), m.index)) ? "域名" : "域名?";
       add(label, dom);
     }
-    // 带标签的账号：管理员/账号/用户名 xxx（值可含空格，遇逗号/分号/右括号结束）
-    const reLabel = /(管理员|账号|账户|用户名?|所有者|owner|user(?:name)?|account)\s*[:：为是]?\s*([A-Za-z0-9_.@\-\u4e00-\u9fa5 ]{2,40}?)(?=[\s]*[，,；;）)\n]|$)/g;
-    while ((m = reLabel.exec(text))) add(m[1].replace(/名$/, ""), m[2]);
-    // 「域名 xxx」显式标签（值可能是多级域名）
-    const reDomLabel = /域名\s*[:：为是]?\s*([a-zA-Z0-9][\w.-]{2,60})/g;
+    // 带标签的账号：管理员/账号/Administrator/Domain 等标签后跟值（同行冒号或分行均可，值遇逗号/换行/右括号结束）
+    const LABEL_MAP = {
+      "administrator": "管理员", "admin": "管理员", "owner": "所有者", "account": "账号",
+      "account name": "账号", "account id": "账号", "username": "用户", "user": "用户",
+      "e-mail": "邮箱", "email": "邮箱", "mail": "邮箱",
+    };
+    const normLabel = (l) => LABEL_MAP[l.toLowerCase()] || l.replace(/名$/, "");
+    const reLabel = /(管理员|账号|账户|用户名?|所有者|administrator|admin|owner|user(?:name)?|account(?:\s+(?:name|id))?|e-?mail|mail)\s*[:：为是]?\s*([A-Za-z0-9_.@\-\u4e00-\u9fa5 ]{2,40}?)(?=[\s]*[，,；;）)\n]|$)/gi;
+    while ((m = reLabel.exec(text))) add(normLabel(m[1]), m[2]);
+    // 「域名 xxx」显式标签（中英文，同行或分行，值可能是多级域名）
+    const reDomLabel = /(?:域名|domain)\s*[:：为是]?\s*\n*\s*([a-zA-Z0-9][\w.-]{2,60})/gi;
     while ((m = reDomLabel.exec(text))) add("域名", m[1]);
 
     return out.slice(0, 6);
