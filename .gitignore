@@ -4,8 +4,7 @@ data/
 *.db-shm
 *.db-wal
 .env
-migrate/remindflow.db*
-migrate/seed_*.json
+migrate/
 
 # Python
 .venv/

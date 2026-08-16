@@ -2,9 +2,7 @@
 
 > 自部署的轻量效期提醒系统：到期前按你设定的节奏推送到手机（Bark / MagicPush），配 Web 管理界面、Chrome 快速添加插件和一套 Token API。
 >
-> 单容器、SQLite 存储、零外部依赖、离线内网可用。
-
-从商业软件「时效管家（remind-flow）」迁移而来——不依赖任何卡密/授权服务器，数据完全归自己。
+> 单容器、SQLite 存储、零外部依赖、离线内网可用，数据完全归自己。
 
 ---
 
@@ -204,7 +202,6 @@ remind-lite/
 ├── templates/      # Jinja2 页面
 ├── static/         # CSS/JS
 ├── extension/      # Chrome MV3 插件（含识别引擎 parse.js）
-├── migrate/        # 时效管家数据迁移脚本
 ├── Dockerfile
 ├── docker-compose.yml
 └── .env.example    # 部署配置模板（真实 .env 不入库）

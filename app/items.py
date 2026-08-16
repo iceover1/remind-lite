@@ -9,7 +9,7 @@ from . import config
 TZ = ZoneInfo(config.TZ_NAME)
 
 CATEGORIES = ["域名", "服务器", "证件", "订阅", "质保", "其他"]
-DEFAULT_REMIND_DAYS = [30, 7, 1, 0]   # 提前 N 天时推送（0 = 当天），沿用原时效管家习惯
+DEFAULT_REMIND_DAYS = [30, 7, 1, 0]   # 提前 N 天时推送（0 = 当天），默认节奏
 DEFAULT_REMIND_TIMES = ["09:00"]
 
 
