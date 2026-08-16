@@ -200,6 +200,22 @@ def items_done(item_id: int, request: Request):
     return RedirectResponse(request.headers.get("referer") or "/items", status_code=303)
 
 
+# ---------- 嵌入页（flatnas 等 iframe 卡片用，Token 鉴权、只读） ----------
+
+@router.get("/embed/upcoming", response_class=HTMLResponse)
+def embed_upcoming(request: Request, token: str = "", limit: int = 10):
+    """紧凑到期列表，按到期日升序（逾期自然排最前）。供导航页 iframe 嵌入。"""
+    limit = max(5, min(limit, 10))
+    user = db.query_one("SELECT * FROM users WHERE api_token=?", (token.strip(),))
+    if not user:
+        return templates.TemplateResponse(request, "embed_error.html",
+                                          {"message": "Token 无效（在时效 Lite 设置页重新复制）"},
+                                          status_code=401)
+    rows = [items.item_display(i) for i in db.query(
+        "SELECT * FROM items WHERE status='active' ORDER BY expire_date LIMIT ?", (limit,))]
+    return render(request, "embed_upcoming.html", {"rows": rows})
+
+
 # ---------- 发送日志 ----------
 
 @router.get("/logs", response_class=HTMLResponse)

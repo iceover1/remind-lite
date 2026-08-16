@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="refresh" content="1800">
+<style>
+  :root { --bg:#f5f6f8; --text:#1f2733; --muted:#66707e; --border:#e2e7ee;
+          --warn:#c27400; --danger:#d3455b; --primary:#3b74f2; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d1117; --text:#e6edf3; --muted:#8b95a5; --border:#28324a; }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text);
+         font: 13px/1.45 -apple-system, "PingFang SC", sans-serif; padding: 8px; }
+  a.row { display: flex; align-items: center; gap: 8px; padding: 6px 6px;
+          border-bottom: 1px dashed var(--border); text-decoration: none; color: var(--text); }
+  a.row:last-child { border-bottom: none; }
+  a.row:hover { background: color-mix(in srgb, var(--primary) 7%, transparent); }
+  .days { flex-shrink: 0; min-width: 52px; text-align: center; font-weight: 700;
+          font-size: 12px; border-radius: 6px; padding: 2px 4px;
+          background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); }
+  .days.warn { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+  .days.danger { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
+  .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .date { flex-shrink: 0; color: var(--muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+{% for it in rows %}
+<a class="row" href="/" target="_blank" title="{{ it.title }}（{{ it.left_text }}）">
+  <span class="days {% if it.days_left < 0 %}danger{% elif it.days_left <= 3 %}warn{% endif %}">
+    {% if it.days_left < 0 %}逾期{{ -it.days_left }}天{% elif it.days_left == 0 %}今天{% else %}{{ it.days_left }}天{% endif %}
+  </span>
+  <span class="name">{{ it.title }}</span>
+  <span class="date">{{ it.expire_date[5:] }}{% if it.cycle != 'none' %} 🔁{% endif %}</span>
+</a>
+{% endfor %}
+{% if not rows %}<div style="color:var(--muted);text-align:center;padding:18px 0">暂无到期事项 ✅</div>{% endif %}
+</body>
+</html>

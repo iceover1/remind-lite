@@ -2,7 +2,7 @@ services:
   remind-lite:
     build: .
     container_name: remind-lite
-    image: remind-lite:1.0.4
+    image: remind-lite:1.0.5
     restart: unless-stopped
     ports:
       - "${RL_PORT:-15809}:8000"
