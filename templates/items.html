@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}效期管理 · {{ app_name }}{% endblock %}
+{% block content %}
+<h2>效期管理</h2>
+
+<details class="form-box" {% if editing %}open{% endif %} id="item-form-box">
+  <summary>{{ editing and '✏️ 编辑事项 #' ~ editing.id or '➕ 新建事项' }}</summary>
+  <form method="post" action="/items/save" class="item-form" id="item-form">
+    {% if editing %}<input type="hidden" name="id" value="{{ editing.id }}">{% endif %}
+    <div class="row">
+      <label>名称<input class="input" name="title" required value="{{ editing.title or '' }}" placeholder="如：dpdns.org 域名续费"></label>
+      <label>分类
+        <select class="input" name="category">
+          {% for c in categories %}<option {% if editing and editing.category == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <label>到期日<input class="input" type="date" name="expire_date" required value="{{ editing.expire_date or '' }}"></label>
+      <label>循环
+        <select class="input" name="cycle" id="cycle-sel">
+          {% for v, lbl in [('none','不循环'),('month','每月'),('year','每年'),('custom','自定义')] %}
+          <option value="{{ v }}" {% if editing and editing.cycle == v %}selected{% endif %}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label id="cycle-days-wrap" style="display:none">周期天数<input class="input" type="number" name="cycle_days" min="1" value="{{ editing.cycle_days or '' }}" placeholder="如 90"></label>
+    </div>
+    <div class="row">
+      <label>提前提醒窗口（天）<input class="input" type="number" name="advance_days" min="0" max="365" value="{{ editing.advance_days or 30 }}"></label>
+      <label>提醒日（JSON）<input class="input" name="remind_days" id="remind-days" value='{{ editing.remind_days_json or default_days }}' title="提前第 N 天各推一次，0=当天；或填 all 窗口内每天"></label>
+      <label>推送时刻（JSON）<input class="input" name="remind_times" id="remind-times" value='{{ editing.remind_times_json or default_times }}' title='当天哪几个时刻推送，如 ["09:00","20:00"]'></label>
+    </div>
+    <label class="block">备注<textarea class="input" name="note" rows="2" placeholder="续费入口、账号等">{{ editing.note or '' }}</textarea></label>
+    <div class="row">
+      <button class="btn primary" type="submit">保存</button>
+      <div class="quick-times">
+        快捷时刻：
+        <button type="button" class="chip" data-times='["09:00"]'>早9点×1</button>
+        <button type="button" class="chip" data-times='["09:00","20:00"]'>早晚×2</button>
+        <button type="button" class="chip" data-times='["09:00","13:00","20:00"]'>三档×3</button>
+      </div>
+    </div>
+  </form>
+</details>
+
+{% if not rows %}<div class="empty">还没有事项，点上面新建</div>{% endif %}
+
+{% for it in rows %}
+<div class="card list {% if it.status == 'done' %}done{% elif it.days_left is not none and it.days_left < 0 %}danger{% elif it.days_left is not none and it.days_left <= 3 %}warn{% endif %}">
+  <div class="card-main">
+    <div class="card-title">{{ it.title }} <span class="tag">{{ it.category }}</span>
+      {% if it.status == 'done' %}<span class="tag">已完成</span>{% endif %}
+      {% if it.cycle != 'none' %}<span class="tag">🔁{{ it.cycle_disp }}</span>{% endif %}
+    </div>
+    <div class="card-sub">
+      到期 {{ it.expire_date }} ·
+      {% if it.status == 'active' %}<b class="left">{{ it.left_text }}</b> · {% endif %}
+      {{ it.remind_days_disp }} {{ it.remind_times_disp }} 推送
+    </div>
+    {% if it.note %}<div class="card-note">{{ it.note }}</div>{% endif %}
+  </div>
+  <div class="card-actions">
+    {% if it.status == 'active' %}
+    <button class="btn ghost test-btn" data-id="{{ it.id }}" title="立即推一条测试到手机">测试</button>
+    {% endif %}
+    <a class="btn ghost" href="/items?edit={{ it.id }}">编辑</a>
+    {% if it.status == 'active' %}
+    <form method="post" action="/items/{{ it.id }}/done" class="inline"><button class="btn ghost">完成</button></form>
+    {% endif %}
+    <form method="post" action="/items/{{ it.id }}/delete" class="inline"
+          onsubmit="return confirm('删除「{{ it.title }}」？推送日志一并删除')"><button class="btn ghost danger-text">删除</button></form>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

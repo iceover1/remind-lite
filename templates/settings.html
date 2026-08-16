@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}设置 · {{ app_name }}{% endblock %}
+{% block content %}
+<h2>设置</h2>
+{% if msg %}<div class="alert ok">{{ msg }}</div>{% endif %}
+
+<h3>🔔 Bark 推送通道</h3>
+{% for c in channels %}
+<div class="card list">
+  <div class="card-main">
+    <div class="card-title">{{ c.name }} {% if c.enabled %}<span class="tag ok">启用</span>{% else %}<span class="tag">停用</span>{% endif %}</div>
+    <div class="card-sub">{{ c.server_url }} · key {{ c.device_key[:8] }}…</div>
+  </div>
+  <div class="card-actions">
+    <form method="post" action="/settings/channel/{{ c.id }}/delete" class="inline"
+          onsubmit="return confirm('删除通道 {{ c.name }}？')"><button class="btn ghost danger-text">删除</button></form>
+  </div>
+</div>
+{% endfor %}
+{% if not channels %}<div class="empty">还没有通道（不配置则不会推送）</div>{% endif %}
+
+<details class="form-box">
+  <summary>➕ 添加通道</summary>
+  <form method="post" action="/settings/channel/add" class="item-form">
+    <div class="row">
+      <label>名称<input class="input" name="name" required placeholder="我的 iPhone"></label>
+      <label>服务器<input class="input" name="server_url" required placeholder="http://<MagicPush或Bark服务器IP>:818 或 https://api.day.app"></label>
+    </div>
+    <label class="block">Device Key<input class="input" name="device_key" required placeholder="Bark App 内复制的 Key"></label>
+    <button class="btn primary">添加</button>
+  </form>
+</details>
+
+<h3>🤖 API Token <span class="muted small">沙僧口头指令 / 浏览器插件用</span></h3>
+<div class="card list">
+  <div class="card-main">
+    <div class="mono small" style="word-break:break-all">{{ api_token or '（未生成）' }}</div>
+  </div>
+  <div class="card-actions">
+    <form method="post" action="/settings/token/reset" class="inline"
+          onsubmit="return confirm('重置 Token？旧的立即失效（插件需更新配置）')"><button class="btn ghost">重置</button></form>
+  </div>
+</div>
+
+<h3>🔑 修改密码</h3>
+<details class="form-box">
+  <summary>修改 Web 登录密码</summary>
+  <form method="post" action="/settings/password" class="item-form">
+    <div class="row">
+      <label>旧密码<input class="input" type="password" name="old_password" required></label>
+      <label>新密码<input class="input" type="password" name="new_password" required minlength="6"></label>
+    </div>
+    <button class="btn primary">修改</button>
+  </form>
+</details>
+{% endblock %}

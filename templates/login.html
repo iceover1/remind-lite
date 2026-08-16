@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}登录 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-title">⏰ {{ app_name }}</div>
+    {% if err %}<div class="alert err">{{ err }}</div>{% endif %}
+    <form method="post" action="/login">
+      <input class="input" type="text" name="username" placeholder="用户名" required autofocus>
+      <input class="input" type="password" name="password" placeholder="密码" required>
+      <button class="btn primary block" type="submit">登 录</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

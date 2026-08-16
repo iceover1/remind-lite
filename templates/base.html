@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}{{ app_name }}{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏰</text></svg>">
+</head>
+<body>
+{% if user %}
+<nav class="nav">
+  <a class="brand" href="/">⏰ {{ app_name }}</a>
+  <div class="nav-links">
+    <a href="/" class="nav-link {% if nav == 'index' %}on{% endif %}">今日</a>
+    <a href="/items" class="nav-link {% if nav == 'items' %}on{% endif %}">效期管理</a>
+    <a href="/logs" class="nav-link {% if nav == 'logs' %}on{% endif %}">发送日志</a>
+    <a href="/settings" class="nav-link {% if nav == 'settings' %}on{% endif %}">设置</a>
+    <form method="post" action="/logout" class="inline"><button class="nav-link logout">退出</button></form>
+  </div>
+</nav>
+{% endif %}
+<main class="container">
+{% block content %}{% endblock %}
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

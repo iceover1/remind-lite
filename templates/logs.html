@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}发送日志 · {{ app_name }}{% endblock %}
+{% block content %}
+<h2>发送日志 <span class="muted small">最近 200 条</span></h2>
+{% if not logs %}<div class="empty">暂无推送记录</div>{% endif %}
+<div class="table-wrap">
+<table>
+<thead><tr><th>时间</th><th>事项</th><th>提醒日/时刻</th><th>通道</th><th>结果</th><th>详情</th></tr></thead>
+<tbody>
+{% for l in logs %}
+<tr>
+  <td>{{ l.pushed_at }}</td>
+  <td>{{ l.item_title or '#' ~ l.item_id }}</td>
+  <td>{{ l.remind_date }} {{ l.remind_time }}</td>
+  <td>{{ l.channel_name }}</td>
+  <td>{% if l.ok %}<span class="tag ok">成功</span>{% else %}<span class="tag fail">失败</span>{% endif %}</td>
+  <td class="detail">{{ l.detail[:80] }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

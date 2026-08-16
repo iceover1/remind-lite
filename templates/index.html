@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}今日 · {{ app_name }}{% endblock %}
+{% block content %}
+<h2>今日概览 <span class="muted">{{ today }}</span></h2>
+
+{% if not due %}
+<div class="empty">今天没有需要提醒的事项 ✅</div>
+{% endif %}
+
+{% for it in due %}
+<div class="card {% if it.days_left < 0 %}danger{% elif it.days_left <= 3 %}warn{% endif %}" data-id="{{ it.id }}">
+  <div class="card-main">
+    <div class="card-title">
+      {{ it.title }}
+      <span class="tag">{{ it.category }}</span>
+    </div>
+    <div class="card-sub">
+      到期日 {{ it.expire_date }} · <b class="left">{{ it.left_text }}</b>
+      {% if it.cycle != 'none' %} · 🔁{{ it.cycle_disp }}{% endif %}
+    </div>
+    {% if it.note %}<div class="card-note">{{ it.note }}</div>{% endif %}
+  </div>
+  <div class="card-actions">
+    {% if it.id in acked %}
+      <span class="tag ok">✅ 已确认</span>
+    {% else %}
+      <button class="btn ok ack-btn" data-id="{{ it.id }}">知道了</button>
+    {% endif %}
+    <button class="btn ghost done-btn" data-id="{{ it.id }}" title="完成并归档">完成</button>
+  </div>
+</div>
+{% endfor %}
+
+<div class="muted small" style="margin-top:24px">
+共 {{ active_count }} 个进行中的事项 · 点击「知道了」后今日不再推送剩余提醒
+</div>
+{% endblock %}

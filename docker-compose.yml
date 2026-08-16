@@ -1,0 +1,17 @@
+services:
+  remind-lite:
+    build: .
+    container_name: remind-lite
+    image: remind-lite:1.0.0
+    restart: unless-stopped
+    ports:
+      - "${RL_PORT:-15809}:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      TZ: Asia/Shanghai
+      # 真实部署值放同目录 .env（已 gitignore，绝不入库）；模板见 .env.example
+      RL_USERNAME: ${RL_USERNAME:-admin}
+      RL_PASSWORD: ${RL_PASSWORD:-changeme}
+      RL_BASE_URL: ${RL_BASE_URL:-http://localhost:15809}
+      RL_BARK_SERVER: ${RL_BARK_SERVER:-}

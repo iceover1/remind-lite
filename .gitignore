@@ -1,0 +1,16 @@
+# 数据与凭证（绝不入库）
+data/
+*.db
+*.db-shm
+*.db-wal
+.env
+migrate/remindflow.db*
+migrate/seed_*.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# 系统
+.DS_Store
