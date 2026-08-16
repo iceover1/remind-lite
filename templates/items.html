@@ -5,7 +5,9 @@
 
 <details class="form-box" {% if editing %}open{% endif %} id="item-form-box">
   <summary>{{ editing and '✏️ 编辑事项 #' ~ editing.id or '➕ 新建事项' }}</summary>
-  <form method="post" action="/items/save" class="item-form" id="item-form">
+  <form method="post" action="/items/save" class="item-form" id="item-form"
+        data-days='{{ editing.remind_days_json if editing else default_days }}'
+        data-times='{{ editing.remind_times_json if editing else default_times }}'>
     {% if editing %}<input type="hidden" name="id" value="{{ editing.id }}">{% endif %}
     <div class="row">
       <label>名称<input class="input" name="title" required value="{{ editing.title or '' }}" placeholder="如：dpdns.org 域名续费"></label>
@@ -24,23 +26,53 @@
           {% endfor %}
         </select>
       </label>
-      <label id="cycle-days-wrap" style="display:none">周期天数<input class="input" type="number" name="cycle_days" min="1" value="{{ editing.cycle_days or '' }}" placeholder="如 90"></label>
+      <label id="cycle-days-wrap" style="display:none">周期天数<input class="input" type="number" id="cycle-days" min="1" value="{{ editing.cycle_days or '' }}" placeholder="如 90"></label>
     </div>
+
+    <fieldset class="remind-box">
+      <legend>提醒日（勾选到期前第几天推送）</legend>
+      <div class="checks">
+        <label class="check"><input type="checkbox" data-day="30"> 提前30天</label>
+        <label class="check"><input type="checkbox" data-day="14"> 提前14天</label>
+        <label class="check"><input type="checkbox" data-day="7"> 提前7天</label>
+        <label class="check"><input type="checkbox" data-day="3"> 提前3天</label>
+        <label class="check"><input type="checkbox" data-day="1"> 提前1天</label>
+        <label class="check"><input type="checkbox" data-day="0"> 当天</label>
+      </div>
+      <div class="custom-days-row">
+        其他天数（逗号分隔，可留空）
+        <input class="input inline-in" id="custom-days" placeholder="如 45, 60">
+      </div>
+    </fieldset>
+
+    <fieldset class="remind-box">
+      <legend>推送时刻（当天推几次就加几个时间）</legend>
+      <div id="time-list" class="time-list"></div>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="chip" id="add-time">＋ 加一个时刻</button>
+        <span class="quick-times">
+          快捷：
+          <button type="button" class="chip" data-times='["09:00"]'>早9点×1</button>
+          <button type="button" class="chip" data-times='["09:00","20:00"]'>早晚×2</button>
+          <button type="button" class="chip" data-times='["09:00","13:00","20:00"]'>三档×3</button>
+        </span>
+      </div>
+    </fieldset>
+
     <div class="row">
-      <label>提前提醒窗口（天）<input class="input" type="number" name="advance_days" min="0" max="365" value="{{ editing.advance_days or 30 }}"></label>
-      <label>提醒日（JSON）<input class="input" name="remind_days" id="remind-days" value='{{ editing.remind_days_json or default_days }}' title="提前第 N 天各推一次，0=当天；或填 all 窗口内每天"></label>
-      <label>推送时刻（JSON）<input class="input" name="remind_times" id="remind-times" value='{{ editing.remind_times_json or default_times }}' title='当天哪几个时刻推送，如 ["09:00","20:00"]'></label>
+      <label>提前提醒窗口（天）<input class="input" type="number" id="advance-days-in" min="0" max="365" value="{{ editing.advance_days or 30 }}"></label>
+      <label class="block" style="flex:2 1 300px">备注<textarea class="input" name="note" rows="2" placeholder="续费入口、账号等">{{ editing.note or '' }}</textarea></label>
     </div>
-    <label class="block">备注<textarea class="input" name="note" rows="2" placeholder="续费入口、账号等">{{ editing.note or '' }}</textarea></label>
     <div class="row">
       <button class="btn primary" type="submit">保存</button>
-      <div class="quick-times">
-        快捷时刻：
-        <button type="button" class="chip" data-times='["09:00"]'>早9点×1</button>
-        <button type="button" class="chip" data-times='["09:00","20:00"]'>早晚×2</button>
-        <button type="button" class="chip" data-times='["09:00","13:00","20:00"]'>三档×3</button>
-      </div>
+      <span class="muted small">提示：循环事项到期后自动滚到下一周期；「每年」适合域名/服务器续费</span>
     </div>
+
+    <!-- JS 组装的隐藏字段 -->
+    <input type="hidden" name="remind_days" id="remind-days">
+    <input type="hidden" name="remind_times" id="remind-times">
+    <input type="hidden" name="cycle_days" id="cycle-days-hidden">
+    <input type="hidden" name="advance_days" id="advance-days-hidden">
   </form>
 </details>
 
@@ -49,7 +81,7 @@
 {% for it in rows %}
 <div class="card list {% if it.status == 'done' %}done{% elif it.days_left is not none and it.days_left < 0 %}danger{% elif it.days_left is not none and it.days_left <= 3 %}warn{% endif %}">
   <div class="card-main">
-    <div class="card-title">{{ it.title }} <span class="tag">{{ it.category }}</span>
+    <div class="card-title">{{ it.title }} <span class="tag cat-{{ loop.index0 % 6 }}">{{ it.category }}</span>
       {% if it.status == 'done' %}<span class="tag">已完成</span>{% endif %}
       {% if it.cycle != 'none' %}<span class="tag">🔁{{ it.cycle_disp }}</span>{% endif %}
     </div>

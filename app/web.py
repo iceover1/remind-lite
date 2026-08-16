@@ -62,9 +62,16 @@ def index(request: Request):
     t = items.today().isoformat()
     due = [items.item_display(i) for i in items.due_items()]
     acked = {a["item_id"] for a in db.query("SELECT item_id FROM acks WHERE ack_date=?", (t,))}
+    active = [items.item_display(i) for i in items.upcoming(limit=999)]
+    stats = {
+        "today": len(due),
+        "overdue": sum(1 for i in active if i["days_left"] < 0),
+        "week": sum(1 for i in active if 0 <= i["days_left"] <= 7),
+        "active": len(active),
+    }
     return render(request, "index.html", {
         "due": due, "acked": acked, "today": t,
-        "active_count": len(items.upcoming(limit=999)),
+        "active_count": stats["active"], "stats": stats,
     })
 
 
@@ -96,8 +103,8 @@ def items_page(request: Request, edit: int | None = None):
 @router.post("/items/save")
 def items_save(request: Request, id: int | None = Form(None), title: str = Form(...),
                category: str = Form("其他"), note: str = Form(""), expire_date: str = Form(...),
-               cycle: str = Form("none"), cycle_days: int | None = Form(None),
-               advance_days: int = Form(30), remind_days: str = Form("[30,7,1,0]"),
+               cycle: str = Form("none"), cycle_days: str = Form(""),
+               advance_days: str = Form("30"), remind_days: str = Form("[30,7,1,0]"),
                remind_times: str = Form('["09:00"]')):
     if r := _login_or_redirect(request):
         return r
@@ -107,19 +114,37 @@ def items_save(request: Request, id: int | None = Form(None), title: str = Form(
         return RedirectResponse("/items?err=日期格式错误", status_code=303)
     if cycle not in ("none", "month", "year", "custom"):
         cycle = "none"
-    if cycle == "custom" and not (cycle_days and cycle_days > 0):
+    # 表单空字符串宽容处理（浏览器对空 number input 提交 ""）
+    try:
+        cycle_days_i = int(cycle_days) if str(cycle_days).strip() else None
+    except ValueError:
+        cycle_days_i = None
+    try:
+        advance_i = int(advance_days) if str(advance_days).strip() else 30
+    except ValueError:
+        advance_i = 30
+    if cycle == "custom" and not (cycle_days_i and cycle_days_i > 0):
         return RedirectResponse("/items?err=自定义循环需要填写周期天数", status_code=303)
+    # remind_days / remind_times 兜底：非法 JSON 时回默认
+    try:
+        json.loads(remind_days)
+    except Exception:
+        remind_days = "[30,7,1,0]"
+    try:
+        json.loads(remind_times)
+    except Exception:
+        remind_times = '["09:00"]'
     if id:
         db.execute(
             "UPDATE items SET title=?,category=?,note=?,expire_date=?,cycle=?,cycle_days=?,"
             "advance_days=?,remind_days=?,remind_times=?,updated_at=datetime('now','localtime') WHERE id=?",
-            (title, category, note, expire_date, cycle, cycle_days, advance_days,
+            (title, category, note, expire_date, cycle, cycle_days_i, advance_i,
              remind_days, remind_times, id))
     else:
         db.execute(
             "INSERT INTO items(title,category,note,expire_date,cycle,cycle_days,advance_days,remind_days,remind_times)"
             " VALUES(?,?,?,?,?,?,?,?,?)",
-            (title, category, note, expire_date, cycle, cycle_days, advance_days,
+            (title, category, note, expire_date, cycle, cycle_days_i, advance_i,
              remind_days, remind_times))
     return RedirectResponse("/items", status_code=303)
 

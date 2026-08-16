@@ -1,6 +1,13 @@
 {% extends "base.html" %}
 {% block title %}今日 · {{ app_name }}{% endblock %}
 {% block content %}
+<div class="stats">
+  <div class="stat"><div class="stat-num">{{ stats.today }}</div><div class="stat-label">今日提醒</div></div>
+  <div class="stat"><div class="stat-num warn-c">{{ stats.overdue }}</div><div class="stat-label">已逾期</div></div>
+  <div class="stat"><div class="stat-num">{{ stats.week }}</div><div class="stat-label">7天内到期</div></div>
+  <div class="stat"><div class="stat-num muted-c">{{ stats.active }}</div><div class="stat-label">进行中</div></div>
+</div>
+
 <h2>今日概览 <span class="muted">{{ today }}</span></h2>
 
 {% if not due %}

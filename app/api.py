@@ -28,6 +28,14 @@ class ItemIn(BaseModel):
         items.parse_date(v)  # 抛 ValueError 即 400
         return v
 
+    @field_validator("cycle_days", mode="before")
+    @classmethod
+    def empty_cycle_days(cls, v):
+        """宽容空串/空值（表单或插件可能传 ""）。"""
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        return int(v)
+
     @field_validator("cycle")
     @classmethod
     def check_cycle(cls, v: str) -> str:
