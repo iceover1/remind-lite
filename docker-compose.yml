@@ -15,3 +15,15 @@ services:
       RL_PASSWORD: ${RL_PASSWORD:-changeme}
       RL_BASE_URL: ${RL_BASE_URL:-http://localhost:15809}
       RL_BARK_SERVER: ${RL_BARK_SERVER:-}
+
+  # 可选：Cloudflare Tunnel 外网 HTTPS 入口（.env 配 CF_TUNNEL_TOKEN 后
+  # 用 docker compose --profile tunnel up -d 启用）
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: remind-lite-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:-}
+    profiles: ["tunnel"]
+    depends_on: [remind-lite]
