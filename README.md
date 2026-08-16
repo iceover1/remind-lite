@@ -1,73 +1,232 @@
-# 时效 Lite
+# ⏰ 时效 Lite（remind-lite）
 
-自研轻量效期提醒系统，替代商业软件「时效管家（remind-flow）」。单容器部署，Bark/MagicPush 推送到手机。
+> 自部署的轻量效期提醒系统：到期前按你设定的节奏推送到手机（Bark / MagicPush），配 Web 管理界面、Chrome 快速添加插件和一套 Token API。
+>
+> 单容器、SQLite 存储、零外部依赖、离线内网可用。
 
-> 部署环境相关的地址、账号全部通过 `.env` 配置（模板 `.env.example`），仓库内不含任何真实内网地址或凭证。
+从商业软件「时效管家（remind-flow）」迁移而来——不依赖任何卡密/授权服务器，数据完全归自己。
 
-## 功能
+---
 
-- **效期管理**：事项（名称/分类/到期日/备注）、循环（每月/每年/自定义N天）、提前提醒窗口
-- **推送策略**：提醒日（默认提前 30/7/1/0 天，或窗口内每天）× 当日多个时刻（如 09:00、20:00）
-- **网页确认**：今日概览点「知道了」→ 当日剩余推送自动取消
-- **推送通道**：自适应 bark-server / MagicPush（`POST /api/push/<key>`）两种格式，多通道
-- **REST API**（`/api/v1`，Bearer Token）：Agent 口头指令 / 浏览器插件共用
-- **Chrome 插件**：`extension/` 目录，快捷键 + 右键菜单快速添加提醒
+## ✨ 功能特性
 
-## 部署（Docker）
+### 提醒策略（核心）
+
+- **效期事项**：名称 / 分类（域名、服务器、证件、订阅、质保…）/ 到期日 / 备注
+- **循环周期**：不循环 / 每月 / 每年 / 自定义 N 天——到期后自动滚动到下一周期，续费类事项一次配置长期有效
+- **提醒日 × 推送时刻 两维组合**：
+  - 提醒日：到期前第 60/30/14/7/3/1/0 天任选（默认 30/7/1/0），也可窗口内每天
+  - 推送时刻：一天内多个时点（如 09:00、13:09、20:00），推几次就配几个
+- **「知道了」确认**：Web 今日概览点一下，当天剩余推送自动取消，第二天恢复
+- **逾期不丢**：未完成的事项每天继续在设定时刻提醒
+- **循环滚动**：每日 00:05 自动把已过期的循环事项滚到下一周期
+
+### 推送
+
+- **自适应双格式**：同一通道自动探测 [bark-server](https://github.com/Finb/bark-server)（`POST /push` JSON）与 [MagicPush](https://github.com/magiccode1412/magicpush)（`POST /api/push/<key>`）两种 API，都不行再回退 bark 经典 GET 路径，且严格校验 JSON 响应防止误报成功
+- **多通道**：可同时推多台设备（自建服务器 / 官方 `api.day.app` 混用）
+- **通知可点击**：推送附带跳转链接，点通知直达 Web 界面
+- **发送日志**：每次推送落库（成功/失败/Bark 响应），失败可一键重发测试
+
+### Web 界面
+
+- 今日概览（今日提醒数 / 已逾期 / 7 天内到期 / 进行中 统计卡片 + 逐条确认）
+- 效期管理：勾选式提醒日、时间选择器式推送时刻、快捷模板（早9点×1 / 早晚×2 / 三档×3）
+- 深色模式自动适配、移动端友好
+- 单用户密码登录 + API Token，表结构预留 `user_id` 可扩展多用户
+
+### Chrome 插件（快速添加）
+
+- 划选网页上的到期信息 → 点 **🎯 识别**：**自动识别到期日**（支持 `2027-08-16`、`2027年8月16日`、`Jul 20, 2027`、`20 Jul 2027`、`07/20/2027`、无年份 `8月16日` 自动推断），多日期并存时按关键词（到期/Expiration 加分、注册/Registration 减分）选对到期日，候选可点选切换
+- **账号信息自动进备注**：识别 `域名 xxx`、`Administrator xxx`、邮箱、账号等（支持中英文标签、标签与值分行），并附来源 URL
+- 快捷日期：明天 / 7天后 / 30天后 / 一年后
+- 提前推送天数勾选（60/30/14/7/3/1/当天）
+- 快捷键 `Ctrl/Cmd+Shift+U` 呼出；右键选中文字「⏰ 用时效 Lite 提醒」自动识别；`🔗本页` 插入当前页标题+链接
+
+### REST API（`/api/v1`）
+
+Agent / 脚本 / 插件共用一套 Bearer Token API，完整读写——可以让 AI 助手直接口头增改提醒。
+
+---
+
+## 🏗 架构
+
+```
+┌────────────┐   划选识别    ┌──────────────┐
+│ Chrome 插件 │ ───────────▶ │              │
+└────────────┘              │   时效 Lite   │
+┌────────────┐   Bearer     │  FastAPI     │
+│ 脚本/AI    │ ───────────▶ │  + APScheduler│
+└────────────┘              │  + SQLite    │
+┌────────────┐   会话Cookie  │      │        │
+│  Web 浏览器 │ ───────────▶ │      │        │
+└────────────┘              └──────┼────────┘
+                                   │ 每分钟 tick
+                                   ▼
+                          ┌────────────────┐
+                          │ bark-server 或  │──▶ 📱 手机 Bark 通知
+                          │   MagicPush    │
+                          └────────────────┘
+```
+
+- **后端**：Python 3.12 / FastAPI / APScheduler / SQLite（WAL 模式）
+- **前端**：Jinja2 服务端渲染 + 原生 JS，无 CDN 依赖（内网/离线可用）
+- **部署**：单容器 Docker，数据就是一个 `remindlite.db` 文件，备份即拷贝
+
+## 📦 快速开始
 
 ```bash
-cp .env.example .env   # 填入本环境的真实地址与初始密码
+git clone https://github.com/iceover1/remind-lite.git
+cd remind-lite
+cp .env.example .env    # 填：端口、初始密码、手机可达的服务地址
 docker compose up -d --build
 ```
 
-离线/内网环境可在有外网的机器构建后传输：
+打开 `http://<NAS或服务器IP>:15809`，用 `.env` 里的账号密码登录。
 
-```bash
-docker build -t remind-lite:1.0.0 .
-docker save remind-lite:1.0.0 | gzip | ssh <user>@<nas> 'gunzip | docker load'
+**首次配置三步：**
+
+1. **设置 → 修改密码**：改掉初始密码
+2. **设置 → 添加推送通道**：
+   - 自建 bark-server：服务器填 `http://<IP>:8080`，Key 填 Bark App 里复制的
+   - 自建 MagicPush：服务器填 `http://<IP>:818`，Key 填推送地址里的 device key
+   - 无自建服务：服务器填 `https://api.day.app`（官方 Bark）
+3. **设置 → API Token**：复制 Token 给 Chrome 插件用（可随时重置，旧的立即失效）
+
+**Chrome 插件安装：**
+
+1. `chrome://extensions` → 打开「开发者模式」
+2. 「加载已解压的扩展程序」→ 选择本仓库的 `extension/` 目录
+3. 点插件图标 ⚙️ → 填服务器地址（`http://<IP>:15809`）+ API Token → 保存
+
+## 📖 使用方式
+
+### 网页
+
+- **今日**：今天要推的事项一目了然，处理完点「知道了」（当天不再推）或「完成」（归档）
+- **效期管理**：新建/编辑事项；域名、服务器续费类建议循环选「每年」，一劳永逸
+- **发送日志**：核对每次推送结果
+
+### 插件（推荐日常入口）
+
+在任意网页（域名后台、订单页…）划选到期信息 → 点图标 → 🎯 识别 → 核对 → 添加。
+或划选后直接右键「⏰ 用时效 Lite 提醒」，打开即自动识别。
+
+### 口头/AI 指令
+
+把 Token 给你的 AI 助手（需能访问你的服务器），然后：
+
+> 「把护照提醒改到 2031 年 8 月」
+> 「加一条 xxx.com 续费提醒，明年 3 月 20 号到期」
+> 「今天的事项都处理了」
+
+## 🔌 API 文档
+
+认证：`Authorization: Bearer <token>`（Web 登录会话 Cookie 也可）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/api/v1/items?due=today` | 今日应提醒事项 |
+| `GET` | `/api/v1/items?status=active` | 全部事项 |
+| `GET` | `/api/v1/items/{id}` | 单条 |
+| `POST` | `/api/v1/items` | 新建 |
+| `PATCH` | `/api/v1/items/{id}` | 修改 |
+| `DELETE` | `/api/v1/items/{id}` | 删除（含日志） |
+| `POST` | `/api/v1/items/{id}/ack` | 当日确认（当天剩余推送取消） |
+| `POST` | `/api/v1/items/{id}/done` | 完成归档 |
+| `POST` | `/api/v1/items/{id}/test-push` | 立即推一条测试 |
+| `GET/POST/DELETE` | `/api/v1/channels` | 推送通道管理 |
+| `GET` | `/api/v1/meta` | 分类等元信息 |
+
+事项字段：
+
+```jsonc
+{
+  "title": "xxx.com 域名续费",
+  "category": "域名",            // 域名|服务器|证件|订阅|质保|其他
+  "note": "续费入口 https://…",
+  "expire_date": "2027-08-16",   // 到期日（推送发生在它之前）
+  "cycle": "year",               // none|month|year|custom
+  "cycle_days": null,            // cycle=custom 时的周期天数
+  "advance_days": 30,            // 提前提醒窗口（天）
+  "remind_days": [30, 7, 1, 0],  // 到期前第几天推（0=当天）；"all"=窗口内每天
+  "remind_times": ["09:00", "20:00"]  // 当天哪些时刻推
+}
 ```
 
-数据在 `./data/remindlite.db`（SQLite WAL），备份即拷此文件。
-
-## 首次使用
-
-1. 浏览器打开 `http://<NAS_IP>:15809`，用 `.env` 里 `RL_USERNAME/RL_PASSWORD` 登录
-2. **设置页**：改密码、添加推送通道（MagicPush/Bark 服务器 + Device Key）、生成 API Token
-3. **效期管理**：新建事项，快捷选推送时刻
-4. Chrome 安装插件：`chrome://extensions` → 开发者模式 → 加载已解压 → 选 `extension/` 目录，配置服务器地址 + API Token
-
-## API 速查
+示例：
 
 ```bash
-T="rl_xxx"   # 设置页生成的 Token
-B="http://<NAS_IP>:15809"
+T="rl_xxx"; B="http://192.168.1.10:15809"
 
-# 今日该提醒的事项
-curl -H "Authorization: Bearer $T" "$B/api/v1/items?due=today"
+# 新增：明年 8 月 16 日到期，提前 30/7/1/0 天，每天早晚各推一次
+curl -X POST "$B/api/v1/items" \
+  -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
+  -d '{"title":"xxx.com 域名续费","category":"域名","expire_date":"2027-08-16",
+       "cycle":"year","remind_days":[30,7,1,0],"remind_times":["09:00","20:00"]}'
 
-# 新增
-curl -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
-  "$B/api/v1/items" -d '{"title":"护照","category":"证件","expire_date":"2031-08-01","remind_times":["09:00"]}'
+# 修改到期日
+curl -X PATCH "$B/api/v1/items/3" -H "Authorization: Bearer $T" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"xxx.com 域名续费","category":"域名","expire_date":"2028-08-16","cycle":"year","remind_times":["09:00"]}'
 
-# 修改 / 确认 / 完成 / 测试推送 / 删除
-curl -X PATCH  -H "Authorization: Bearer $T" ... "$B/api/v1/items/1"  -d '{...}'
-curl -X POST   -H "Authorization: Bearer $T" "$B/api/v1/items/1/ack"
-curl -X POST   -H "Authorization: Bearer $T" "$B/api/v1/items/1/done"
-curl -X POST   -H "Authorization: Bearer $T" "$B/api/v1/items/1/test-push"
-curl -X DELETE -H "Authorization: Bearer $T" "$B/api/v1/items/1"
+# 测试推送
+curl -X POST "$B/api/v1/items/3/test-push" -H "Authorization: Bearer $T"
 ```
 
-## 数据迁移
+## ⏱ 调度语义
 
-`migrate/convert.py`：从原时效管家 `remindflow.db`（SQLite）导出事项与推送通道为 `seed_*.json`（含隐私，不入 git）。原库副本放 `migrate/` 下执行：
+每分钟 tick：当前 `HH:MM` 命中事项的 `remind_times`，且满足——
+
+1. 今天是提醒日（`到期日 - remind_days 中的某值 == 今天`，或已逾期）
+2. 今天没点过「知道了」（acks 表）
+3. 该 (事项, 日期, 时刻) 没推过（防容器重启重复轰炸）
+
+三条都满足才推。全部通道推送结果写入发送日志。
+
+## 🔄 从「时效管家」迁移
 
 ```bash
-python3 migrate/convert.py migrate/remindflow.db migrate/
+python3 migrate/convert.py <remindflow.db 路径> migrate/
+# 生成 seed_items.json / seed_channels.json（含隐私，已 gitignore）
+# 再通过 API 或直接写库导入
 ```
 
-## 调度语义
+自动转换：任务名/备注/到期日/推送时刻、分类启发（域名/服务器）、Bark 通道（含 device key 沿用）。
 
-- 每分钟 tick：当前 HH:MM 命中事项 `remind_times` 且当日为提醒日、未 ack、该时刻未推过 → 推送
-- 逾期未完成：每天继续在设定时刻提醒
-- 每日 00:05：循环事项到期后自动滚动到下一周期
-- 时区 Asia/Shanghai
+## ❓ FAQ
+
+**换个端口？** `.env` 里改 `RL_PORT` 后 `docker compose up -d`。
+
+**多台手机？** 设置页加多个通道即可，每个通道独立服务器+Key。
+
+**手机不在内网怎么收到推送/打开网页？** 推送由服务器发起（服务器能出网即可）；点击通知跳转的地址填 `.env` 的 `RL_BASE_URL`（可以是内网穿透/Tailscale 地址）。Tailscale 用户填 Headscale IP 即可。
+
+**备份？** 拷 `data/remindlite.db` 一个文件（建议停容器或用 `sqlite3 .backup`）。
+
+**时区？** 固定 `Asia/Shanghai`，容器 `TZ` 已设置。
+
+## 📁 目录结构
+
+```
+remind-lite/
+├── app/            # FastAPI 后端（api/web/scheduler/bark/auth…）
+├── templates/      # Jinja2 页面
+├── static/         # CSS/JS
+├── extension/      # Chrome MV3 插件（含识别引擎 parse.js）
+├── migrate/        # 时效管家数据迁移脚本
+├── Dockerfile
+├── docker-compose.yml
+└── .env.example    # 部署配置模板（真实 .env 不入库）
+```
+
+## 📝 更新日志
+
+- **1.0.3** 插件选区读取增强（iframe/输入框/右键自动识别）
+- **1.0.2** 识别引擎支持英文分行标签（Domain/Administrator/Expiration date）
+- **1.0.1** 表单空值修复；提醒日/推送时刻改勾选与时间控件；界面美化（统计栏/阴影/斑马纹表格）
+- **1.0.0** 首版：核心提醒 + 推送 + Web + 插件 + 迁移
+
+---
+
+🔒 **隐私**：所有数据（事项、账号备注、Token）仅存本地 SQLite，除推送服务器外不外发任何数据；仓库与镜像不含任何真实地址或凭证。
