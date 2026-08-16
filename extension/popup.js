@@ -41,28 +41,52 @@ async function saveCfg() {
 }
 
 // ===== 🎯 智能识别：选中文字 → 日期 + 账号 =====
+let lastSelError = "";
+
 async function getSelectionText() {
+  lastSelError = "";
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const res = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => window.getSelection().toString(),
+    // 扫描所有框架（含 iframe）+ 输入框内选区，取最长的一段
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id, allFrames: true },
+      func: () => {
+        let s = "";
+        try { s = window.getSelection().toString(); } catch (_) {}
+        try {
+          const el = document.activeElement;
+          if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")
+              && el.selectionStart != null && el.selectionStart !== el.selectionEnd) {
+            s += "\n" + el.value.slice(el.selectionStart, el.selectionEnd);
+          }
+        } catch (_) {}
+        return s.trim();
+      },
     });
-    if (res && res[0] && res[0].result) return res[0].result;
-  } catch (_) { /* 无权限或特殊页面 */ }
+    const texts = (results || []).map(r => (r.result || "").trim()).filter(Boolean);
+    if (texts.length) return texts.sort((a, b) => b.length - a.length)[0];
+  } catch (e) {
+    lastSelError = (e && e.message) || String(e);
+  }
+  // 兜底：右键菜单「用时效 Lite 提醒」存下的选中文字
   const got = await chrome.storage.local.get(["pendingText"]);
   return got.pendingText || "";
 }
 
-async function smartPick() {
+async function smartPick(silentIfEmpty = false) {
   const msg = $("msg");
   msg.textContent = "读取选中文字…";
   const sel = await getSelectionText();
   if (!sel.trim()) {
     msg.textContent = "";
-    toast("先在网页上用鼠标划选到期信息，再点此按钮", false);
+    if (lastSelError) {
+      toast(`读取选区失败：${lastSelError.slice(0, 60)}。可改用右键菜单「用时效 Lite 提醒」`, false);
+    } else if (!silentIfEmpty) {
+      toast("没读到选区：重新划选后别点别处，直接点插件图标；或对选中文字点右键菜单", false);
+    }
     return;
   }
+  chrome.storage.local.remove("pendingText");
   candDates = RLParser.findDates(sel);
   const accounts = RLParser.findAccounts(sel);
 
@@ -180,6 +204,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   $("title").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) submit();
+  });
+
+  // 右键菜单「用时效 Lite 提醒」带入了选中文字 → 打开即自动识别
+  chrome.storage.local.get(["pendingText"]).then((got) => {
+    if (got.pendingText) smartPick(true);
   });
 });
 
