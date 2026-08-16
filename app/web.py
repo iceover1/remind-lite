@@ -1,17 +1,34 @@
 """Web UI 路由：服务端渲染（Jinja2），表单 POST 为主，按钮动作用 fetch 调 /api/v1。"""
 import json
 import secrets
+from typing import Annotated
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, config, db, items
+from . import auth, bark, config, db, items
 from .config import BASE_DIR
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 templates.env.filters["tojson"] = lambda v: json.dumps(v, ensure_ascii=False)
+
+
+# 登录锁定触发时推一条告警到师傅手机
+def _lockout_alert(ip: str, fails: int) -> None:
+    for r in bark.push_all_channels(
+        f"⚠️时效Lite：登录失败过多",
+        f"15分钟内 {fails} 次失败，来源 {ip}，已锁定15分钟。如非本人操作请检查服务暴露面。",
+        url=None):
+        db.execute(
+            "INSERT INTO push_logs(item_id, remind_date, remind_time, channel_id, channel_name, ok, detail)"
+            " VALUES(0, ?, ?, ?, ?, ?, ?)",
+            (items.today().isoformat(), items.now_hm(), r["channel"]["id"],
+             r["channel"]["name"], 1 if r["ok"] else 0, "[security] " + r["detail"]))
+
+
+auth.set_lockout_hook(_lockout_alert)
 
 
 def render(request: Request, name: str, ctx: dict | None = None, status_code: int = 200):
@@ -36,12 +53,28 @@ def login_page(request: Request, err: str = ""):
 
 
 @router.post("/login")
-def login(request: Request, username: str = Form(...), password: str = Form(...)):
+def login(request: Request,
+          username: Annotated[str, Form(max_length=auth.MAX_USERNAME)] = ...,
+          password: Annotated[str, Form(max_length=auth.MAX_PASSWORD)] = ...):
+    ip = request.client.host if request.client else "?"
+    # 限速：锁定中直接拒（含正确密码，防靠响应差异探密码）
+    locked = auth.throttle_state(ip)
+    if locked > 0:
+        return render(request, "login.html",
+                      {"err": f"尝试过多已锁定，请 {max(locked // 60, 1)} 分钟后再试"},
+                      status_code=429)
     user = db.query_one("SELECT * FROM users WHERE username=?", (username,))
-    if not user or not auth.verify_password(password, user["password_hash"]):
+    if not user:
+        auth.verify_password(password, auth._DUMMY_HASH)  # 抹平用户名不存在的时序差
+        auth.throttle_fail(ip)
         return render(request, "login.html", {"err": "用户名或密码错误"}, status_code=401)
+    if not auth.verify_password(password, user["password_hash"]):
+        auth.throttle_fail(ip)
+        return render(request, "login.html", {"err": "用户名或密码错误"}, status_code=401)
+    auth.throttle_ok(ip)
     resp = RedirectResponse("/", status_code=303)
-    resp.set_cookie(auth.SESSION_COOKIE, auth.make_session(username),
+    resp.set_cookie(auth.SESSION_COOKIE,
+                    auth.make_session(username, user.get("session_ver", 0)),
                     max_age=auth.SESSION_TTL, httponly=True, samesite="lax")
     return resp
 
@@ -219,8 +252,36 @@ def token_reset(request: Request):
     return RedirectResponse("/settings?msg=API Token 已重置（旧 Token 立即失效）", status_code=303)
 
 
+@router.post("/settings/username")
+def username_change(request: Request,
+                    new_username: Annotated[str, Form(max_length=auth.MAX_USERNAME)] = ...,
+                    old_password: Annotated[str, Form(max_length=auth.MAX_PASSWORD)] = ...):
+    """修改用户名（需密码确认）。改名后旧会话作废，当前浏览器换发新会话。"""
+    if r := _login_or_redirect(request):
+        return r
+    user = auth.current_user(request)
+    new_username = new_username.strip()
+    if not auth.verify_password(old_password, user["password_hash"]):
+        return RedirectResponse("/settings?msg=密码错误，用户名未改", status_code=303)
+    if len(new_username) < 3 or any(c.isspace() for c in new_username):
+        return RedirectResponse("/settings?msg=用户名需3位以上且不含空格", status_code=303)
+    if new_username == user["username"]:
+        return RedirectResponse("/settings?msg=与新用户名相同", status_code=303)
+    if db.query_one("SELECT id FROM users WHERE username=?", (new_username,)):
+        return RedirectResponse("/settings?msg=该用户名已被占用", status_code=303)
+    db.execute("UPDATE users SET username=?, session_ver=session_ver+1 WHERE id=?",
+               (new_username, user["id"]))
+    resp = RedirectResponse("/settings?msg=用户名已修改（旧登录名即刻失效）", status_code=303)
+    resp.set_cookie(auth.SESSION_COOKIE,
+                    auth.make_session(new_username, user["session_ver"] + 1),
+                    max_age=auth.SESSION_TTL, httponly=True, samesite="lax")
+    return resp
+
+
 @router.post("/settings/password")
-def password_change(request: Request, old_password: str = Form(...), new_password: str = Form(...)):
+def password_change(request: Request,
+                    old_password: Annotated[str, Form(max_length=auth.MAX_PASSWORD)] = ...,
+                    new_password: Annotated[str, Form(max_length=auth.MAX_PASSWORD)] = ...):
     if r := _login_or_redirect(request):
         return r
     user = auth.current_user(request)
@@ -228,6 +289,12 @@ def password_change(request: Request, old_password: str = Form(...), new_passwor
         return RedirectResponse("/settings?msg=旧密码错误", status_code=303)
     if len(new_password) < 6:
         return RedirectResponse("/settings?msg=新密码至少6位", status_code=303)
-    db.execute("UPDATE users SET password_hash=? WHERE id=?",
+    # 改密码 → 会话版本+1：所有旧会话（含被偷的Cookie）立即作废
+    db.execute("UPDATE users SET password_hash=?, session_ver=session_ver+1 WHERE id=?",
                (auth.hash_password(new_password), user["id"]))
-    return RedirectResponse("/settings?msg=密码已修改", status_code=303)
+    fresh = db.query_one("SELECT * FROM users WHERE id=?", (user["id"],))
+    resp = RedirectResponse("/settings?msg=密码已修改（其他已登录设备已全部下线）", status_code=303)
+    resp.set_cookie(auth.SESSION_COOKIE,
+                    auth.make_session(user["username"], fresh["session_ver"]),
+                    max_age=auth.SESSION_TTL, httponly=True, samesite="lax")
+    return resp

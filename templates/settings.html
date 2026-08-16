@@ -42,6 +42,18 @@
   </div>
 </div>
 
+<h3>🔑 修改用户名 <span class="muted small">改掉默认的 admin，登录名更难猜</span></h3>
+<details class="form-box">
+  <summary>修改用户名（需密码确认）</summary>
+  <form method="post" action="/settings/username" class="item-form">
+    <div class="row">
+      <label>新用户名<input class="input" name="new_username" required minlength="3" placeholder="3位以上，不含空格"></label>
+      <label>当前密码<input class="input" type="password" name="old_password" required></label>
+    </div>
+    <button class="btn primary">修改用户名</button>
+  </form>
+</details>
+
 <h3>🔑 修改密码</h3>
 <details class="form-box">
   <summary>修改 Web 登录密码</summary>
