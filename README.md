@@ -184,16 +184,6 @@ curl -X POST "$B/api/v1/items/3/test-push" -H "Authorization: Bearer $T"
 
 三条都满足才推。全部通道推送结果写入发送日志。
 
-## 🔄 从「时效管家」迁移
-
-```bash
-python3 migrate/convert.py <remindflow.db 路径> migrate/
-# 生成 seed_items.json / seed_channels.json（含隐私，已 gitignore）
-# 再通过 API 或直接写库导入
-```
-
-自动转换：任务名/备注/到期日/推送时刻、分类启发（域名/服务器）、Bark 通道（含 device key 沿用）。
-
 ## ❓ FAQ
 
 **换个端口？** `.env` 里改 `RL_PORT` 后 `docker compose up -d`。
