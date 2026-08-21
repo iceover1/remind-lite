@@ -3,7 +3,7 @@ services:
     build: .
     container_name: remind-lite
     image: remind-lite:1.0.5
-    restart: unless-stopped
+    restart: always
     ports:
       - "${RL_PORT:-15809}:8000"
     volumes:
@@ -21,7 +21,7 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: remind-lite-tunnel
-    restart: unless-stopped
+    restart: always
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:-}
